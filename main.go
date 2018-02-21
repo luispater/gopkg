@@ -195,15 +195,15 @@ func (repo *Repo) GopkgVersionRoot(version Version) string {
 	v := version.String()
 	if repo.OldFormat {
 		if repo.User == "" {
-			return "localhost:8080/" + v + "/" + repo.Name
+			return "gopkg.co/" + v + "/" + repo.Name
 		} else {
-			return "localhost:8080/" + repo.User + "/" + v + "/" + repo.Name
+			return "gopkg.co/" + repo.User + "/" + v + "/" + repo.Name
 		}
 	} else {
 		if repo.User == "" {
-			return "localhost:8080/" + repo.Name + "." + v
+			return "gopkg.co/" + repo.Name + "." + v
 		} else {
-			return "localhost:8080/" + repo.User + "/" + repo.Name + "." + v
+			return "gopkg.co/" + repo.User + "/" + repo.Name + "." + v
 		}
 	}
 }
@@ -221,15 +221,15 @@ func (repo *Repo) GopkgVersionRootEx(version Version, minor, patch bool) string 
 	v := version.String()
 	if repo.OldFormat {
 		if repo.User == "" {
-			return "localhost:8080/" + v + "/" + repo.Name
+			return "gopkg.co/" + v + "/" + repo.Name
 		} else {
-			return "localhost:8080/" + repo.User + "/" + v + "/" + repo.Name
+			return "gopkg.co/" + repo.User + "/" + v + "/" + repo.Name
 		}
 	} else {
 		if repo.User == "" {
-			return "localhost:8080/" + repo.Name + "." + v
+			return "gopkg.co/" + repo.Name + "." + v
 		} else {
-			return "localhost:8080/" + repo.User + "/" + repo.Name + "." + v
+			return "gopkg.co/" + repo.User + "/" + repo.Name + "." + v
 		}
 	}
 }
