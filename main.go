@@ -20,8 +20,8 @@ import (
 )
 
 var (
-	httpFlag  = flag.String("http", ":80", "Serve HTTP at given address")
-	httpsFlag = flag.String("https", ":443", "Serve HTTPS at given address")
+	httpFlag  = flag.String("http", ":8080", "Serve HTTP at given address")
+	httpsFlag = flag.String("https", "", "Serve HTTPS at given address")
 	certFlag  = flag.String("cert", "", "Use the provided TLS certificate")
 	keyFlag   = flag.String("key", "", "Use the provided TLS key")
 	acmeFlag  = flag.String("acme", "", "Auto-request TLS certs and store in given directory")
@@ -175,8 +175,34 @@ func (repo *Repo) GopkgPath() string {
 // GopkgVersionRoot returns the package root in gopkg.co for the
 // provided version, without a schema.
 func (repo *Repo) GopkgVersionRoot(version Version) string {
-	version.Minor = -1
-	version.Patch = -1
+	//version.Minor = -1
+	//version.Patch = -1
+	v := version.String()
+	if repo.OldFormat {
+		if repo.User == "" {
+			return "gopkg.co/" + v + "/" + repo.Name
+		} else {
+			return "gopkg.co/" + repo.User + "/" + v + "/" + repo.Name
+		}
+	} else {
+		if repo.User == "" {
+			return "gopkg.co/" + repo.Name + "." + v
+		} else {
+			return "gopkg.co/" + repo.User + "/" + repo.Name + "." + v
+		}
+	}
+}
+
+// GopkgVersionRoot returns the package root in gopkg.co for the
+// provided version, without a schema.
+func (repo *Repo) GopkgVersionRootEx(version Version, minor, patch bool) string {
+	if !minor {
+		version.Minor = -1
+	}
+	if !patch {
+		version.Patch = -1
+	}
+
 	v := version.String()
 	if repo.OldFormat {
 		if repo.User == "" {
@@ -223,11 +249,12 @@ func handler(resp http.ResponseWriter, req *http.Request) {
 		oldFormat = true
 	}
 
-	if strings.Contains(m[3], ".") {
-		sendNotFound(resp, "Import paths take the major version only (.%s instead of .%s); see docs at gopkg.co for the reasoning.",
-			m[3][:strings.Index(m[3], ".")], m[3])
-		return
-	}
+	// 不限制只有到第一位版本号
+	//if strings.Contains(m[3], ".") {
+	//	sendNotFound(resp, "Import paths take the major version only (.%s instead of .%s); see docs at gopkg.co for the reasoning.",
+	//		m[3][:strings.Index(m[3], ".")], m[3])
+	//	return
+	//}
 
 	repo := &Repo{
 		User:        m[1],

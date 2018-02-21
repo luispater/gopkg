@@ -157,11 +157,25 @@ const packageTemplateString = `<!DOCTYPE html>
 						<h2>Versions</h2>
 						{{ if .LatestVersions }}
 							{{ range .LatestVersions }}
-								<div>
-									<a href="//{{gopkgVersionRoot $.Repo .}}{{$.Repo.SubPath}}" {{if eq .Major $.Repo.MajorVersion.Major}}{{if eq .Unstable $.Repo.MajorVersion.Unstable}}class="current"{{end}}{{end}}>v{{.Major}}{{if .Unstable}}-unstable{{end}}</a>
-									&rarr;
-									<span class="label label-default">{{.}}</span>
-								</div>
+								{{if eq true $.Patch}}
+									<div>
+										<a href="//{{gopkgVersionRootEx $.Repo . true true}}{{$.Repo.SubPath}}" {{if eq .Patch $.Repo.MajorVersion.Patch}}{{if eq .Unstable $.Repo.MajorVersion.Unstable}}class="current"{{end}}{{end}}>v{{.Major}}.{{.Minor}}.{{.Patch}}{{if .Unstable}}-unstable{{end}}</a>
+										&rarr;
+										<span class="label label-default">{{.}}</span>
+									</div>
+								{{else if eq true $.Minor}}
+									<div>
+										<a href="//{{gopkgVersionRootEx $.Repo . true false}}{{$.Repo.SubPath}}" {{if eq .Minor $.Repo.MajorVersion.Minor}}{{if eq .Unstable $.Repo.MajorVersion.Unstable}}class="current"{{end}}{{end}}>v{{.Major}}.{{.Minor}}{{if .Unstable}}-unstable{{end}}</a>
+										&rarr;
+										<span class="label label-default">{{.}}</span>
+									</div>
+								{{else}}
+									<div>
+										<a href="//{{gopkgVersionRootEx $.Repo . false false}}{{$.Repo.SubPath}}" {{if eq .Major $.Repo.MajorVersion.Major}}{{if eq .Unstable $.Repo.MajorVersion.Unstable}}class="current"{{end}}{{end}}>v{{.Major}}{{if .Unstable}}-unstable{{end}}</a>
+										&rarr;
+										<span class="label label-default">{{.}}</span>
+									</div>
+								{{end}}
 							{{ end }}
 						{{ else }}
 							<div>
@@ -192,12 +206,12 @@ const packageTemplateString = `<!DOCTYPE html>
 
 var packageTemplate *template.Template
 
-func gopkgVersionRoot(repo *Repo, version Version) string {
-	return repo.GopkgVersionRoot(version)
+func gopkgVersionRootEx(repo *Repo, version Version, minor, patch bool) string {
+	return repo.GopkgVersionRootEx(version, minor, patch)
 }
 
 var packageFuncs = template.FuncMap{
-	"gopkgVersionRoot": gopkgVersionRoot,
+	"gopkgVersionRootEx": gopkgVersionRootEx,
 }
 
 func init() {
@@ -215,6 +229,8 @@ type packageData struct {
 	PackageName    string      // Actual package identifier as specified in http://golang.org/ref/spec#PackageClause
 	Synopsis       string
 	GitTreeName    string
+	Minor          bool
+	Patch          bool
 }
 
 // SearchResults is used with the godoc.org search API
@@ -232,15 +248,55 @@ func renderPackagePage(resp http.ResponseWriter, req *http.Request, repo *Repo) 
 		Repo: repo,
 	}
 
-	// Calculate the latest version for each major version, both stable and unstable.
 	latestVersions := make(map[int]Version)
-	for _, v := range repo.AllVersions {
-		if v.Unstable {
-			continue
+	if repo.MajorVersion.Minor == -1 && repo.MajorVersion.Patch == -1 {
+		data.Minor = false
+		data.Patch = false
+		// Calculate the latest version for each major version, both stable and unstable.
+
+		for _, v := range repo.AllVersions {
+			if v.Unstable {
+				continue
+			}
+			v2, exists := latestVersions[v.Major]
+			fmt.Println(v2, exists)
+			if !exists || v2.Less(v) {
+				latestVersions[v.Major] = v
+			}
 		}
-		v2, exists := latestVersions[v.Major]
-		if !exists || v2.Less(v) {
-			latestVersions[v.Major] = v
+	} else if repo.MajorVersion.Patch == -1 {
+		data.Minor = true
+		data.Patch = false
+
+		for _, v := range repo.AllVersions {
+			if v.Unstable {
+				continue
+			}
+
+			if (repo.MajorVersion.Major == v.Major) && (v.Minor != -1) {
+				v2, exists := latestVersions[v.Minor]
+				fmt.Println(v2, exists)
+				if !exists || v2.Less(v) {
+					latestVersions[v.Minor] = v
+				}
+			}
+		}
+	} else {
+		data.Minor = true
+		data.Patch = true
+
+		for _, v := range repo.AllVersions {
+			if v.Unstable {
+				continue
+			}
+
+			if (repo.MajorVersion.Major == v.Major) && (repo.MajorVersion.Minor == v.Minor) && (v.Patch != -1) {
+				v2, exists := latestVersions[v.Patch]
+				fmt.Println(v2, exists)
+				if !exists || v2.Less(v) {
+					latestVersions[v.Patch] = v
+				}
+			}
 		}
 	}
 	data.LatestVersions = make(VersionList, 0, len(latestVersions))
@@ -250,10 +306,11 @@ func renderPackagePage(resp http.ResponseWriter, req *http.Request, repo *Repo) 
 	sort.Sort(sort.Reverse(data.LatestVersions))
 
 	if repo.FullVersion.Unstable {
-		// Prepend post-sorting so it shows first.
 		data.LatestVersions = append([]Version{repo.FullVersion}, data.LatestVersions...)
 	}
 
+
+	fmt.Println(data.LatestVersions)
 	var dataMutex sync.Mutex
 	wantResps := 2
 	gotResp := make(chan bool, wantResps)
@@ -311,7 +368,6 @@ func renderPackagePage(resp http.ResponseWriter, req *http.Request, repo *Repo) 
 
 	dataMutex.Lock()
 	defer dataMutex.Unlock()
-
 	err := packageTemplate.Execute(resp, data)
 	if err != nil {
 		log.Printf("error executing package page template: %v", err)
