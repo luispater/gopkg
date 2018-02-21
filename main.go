@@ -20,8 +20,8 @@ import (
 )
 
 var (
-	httpFlag  = flag.String("http", ":8080", "Serve HTTP at given address")
-	httpsFlag = flag.String("https", "", "Serve HTTPS at given address")
+	httpFlag  = flag.String("http", ":80", "Serve HTTP at given address")
+	httpsFlag = flag.String("https", ":443", "Serve HTTPS at given address")
 	certFlag  = flag.String("cert", "", "Use the provided TLS certificate")
 	keyFlag   = flag.String("key", "", "Use the provided TLS key")
 	acmeFlag  = flag.String("acme", "", "Auto-request TLS certs and store in given directory")
@@ -63,16 +63,28 @@ func run() error {
 
 	ch := make(chan error, 2)
 
+	var m autocert.Manager
 	if *acmeFlag != "" {
 		// So a potential error is seen upfront.
 		if err := os.MkdirAll(*acmeFlag, 0700); err != nil {
 			return err
+		}
+		m = autocert.Manager{
+			Prompt:      autocert.AcceptTOS,
+			Cache:       autocert.DirCache(*acmeFlag),
+			RenewBefore: 24 * 30 * time.Hour,
+			HostPolicy: autocert.HostWhitelist(
+				"localhost",
+				"gopkg.co",
+			),
+			Email: "webmaster@idotorg.org",
 		}
 	}
 
 	if *httpFlag != "" {
 		server := *httpServer
 		server.Addr = *httpFlag
+		server.Handler = m.HTTPHandler(http.HandlerFunc(handler))
 		go func() {
 			ch <- server.ListenAndServe()
 		}()
@@ -81,20 +93,6 @@ func run() error {
 		server := *httpServer
 		server.Addr = *httpsFlag
 		if *acmeFlag != "" {
-			m := autocert.Manager{
-				Prompt:      autocert.AcceptTOS,
-				Cache:       autocert.DirCache(*acmeFlag),
-				RenewBefore: 24 * 30 * time.Hour,
-				HostPolicy: autocert.HostWhitelist(
-					"localhost",
-					"gopkg.in",
-					"p1.gopkg.in",
-					"p2.gopkg.in",
-					"p3.gopkg.in",
-					"mup.labix.org",
-				),
-				Email: "gustavo@niemeyer.net",
-			}
 			server.TLSConfig = &tls.Config{
 				GetCertificate: m.GetCertificate,
 			}
@@ -164,17 +162,17 @@ func (repo *Repo) GitHubTree() string {
 	return repo.FullVersion.String()
 }
 
-// GopkgRoot returns the package root at gopkg.in, without a schema.
+// GopkgRoot returns the package root at gopkg.co, without a schema.
 func (repo *Repo) GopkgRoot() string {
 	return repo.GopkgVersionRoot(repo.MajorVersion)
 }
 
-// GopkgPath returns the package path at gopkg.in, without a schema.
+// GopkgPath returns the package path at gopkg.co, without a schema.
 func (repo *Repo) GopkgPath() string {
 	return repo.GopkgVersionRoot(repo.MajorVersion) + repo.SubPath
 }
 
-// GopkgVersionRoot returns the package root in gopkg.in for the
+// GopkgVersionRoot returns the package root in gopkg.co for the
 // provided version, without a schema.
 func (repo *Repo) GopkgVersionRoot(version Version) string {
 	version.Minor = -1
@@ -182,15 +180,15 @@ func (repo *Repo) GopkgVersionRoot(version Version) string {
 	v := version.String()
 	if repo.OldFormat {
 		if repo.User == "" {
-			return "gopkg.in/" + v + "/" + repo.Name
+			return "gopkg.co/" + v + "/" + repo.Name
 		} else {
-			return "gopkg.in/" + repo.User + "/" + v + "/" + repo.Name
+			return "gopkg.co/" + repo.User + "/" + v + "/" + repo.Name
 		}
 	} else {
 		if repo.User == "" {
-			return "gopkg.in/" + repo.Name + "." + v
+			return "gopkg.co/" + repo.Name + "." + v
 		} else {
-			return "gopkg.in/" + repo.User + "/" + repo.Name + "." + v
+			return "gopkg.co/" + repo.User + "/" + repo.Name + "." + v
 		}
 	}
 }
@@ -207,7 +205,7 @@ func handler(resp http.ResponseWriter, req *http.Request) {
 	log.Printf("%s requested %s", req.RemoteAddr, req.URL)
 
 	if req.URL.Path == "/" {
-		resp.Header().Set("Location", "http://labix.org/gopkg.in")
+		resp.Header().Set("Location", "http://labix.org/gopkg.co")
 		resp.WriteHeader(http.StatusTemporaryRedirect)
 		return
 	}
@@ -217,7 +215,7 @@ func handler(resp http.ResponseWriter, req *http.Request) {
 	if m == nil {
 		m = patternOld.FindStringSubmatch(req.URL.Path)
 		if m == nil {
-			sendNotFound(resp, "Unsupported URL pattern; see the documentation at gopkg.in for details.")
+			sendNotFound(resp, "Unsupported URL pattern; see the documentation at gopkg.co for details.")
 			return
 		}
 		// "/v2/name" <= "/name.v2"
@@ -226,7 +224,7 @@ func handler(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	if strings.Contains(m[3], ".") {
-		sendNotFound(resp, "Import paths take the major version only (.%s instead of .%s); see docs at gopkg.in for the reasoning.",
+		sendNotFound(resp, "Import paths take the major version only (.%s instead of .%s); see docs at gopkg.co for the reasoning.",
 			m[3][:strings.Index(m[3], ".")], m[3])
 		return
 	}

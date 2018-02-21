@@ -179,7 +179,7 @@ const packageTemplateString = `<!DOCTYPE html>
 			<div class="container">
 				<div class="row">
 					<div class="col-sm-12">
-						<p class="text-muted credit"><a href="https://gopkg.in">gopkg.in<a></p>
+						<p class="text-muted credit"><a href="https://gopkg.co">gopkg.co<a></p>
 					</div>
 				</div>
 			</div>
