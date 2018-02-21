@@ -318,14 +318,12 @@ func handler(resp http.ResponseWriter, req *http.Request) {
 
 	if repo.SubPath == "/git-upload-pack" {
 		body, err := ioutil.ReadAll(req.Body)
-		original, err := fetchGitUploadPack(repo, body)
+		original, err := gitUploadPackProxy(repo, req.Header, body)
 		if err==nil {
 			resp.Write(original)
 		} else {
 			resp.WriteHeader(http.StatusNotFound)
 		}
-		//resp.Header().Set("Location", "https://"+repo.GitHubRoot()+"/git-upload-pack")
-		//resp.WriteHeader(http.StatusMovedPermanently)
 		return
 	} else if repo.SubPath == "/info/refs" {
 		resp.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
@@ -361,18 +359,16 @@ const refsSuffix = ".git/info/refs?service=git-upload-pack"
 var ErrNoRepo = errors.New("repository not found in GitHub")
 var ErrNoVersion = errors.New("version reference not found in GitHub")
 
-func fetchGitUploadPack(repo *Repo, body []byte) (data []byte, err error) {
+func gitUploadPackProxy(repo *Repo, header http.Header, body []byte) (data []byte, err error) {
 	r := bytes.NewReader(body)
 	client := &http.Client{}
 	reqest, err := http.NewRequest("POST", "https://"+repo.GitHubRoot()+"/git-upload-pack", r)
 	if err != nil {
 		fmt.Println("Fatal error ", err.Error())
 	}
-	//Add 头协议
-	reqest.Header.Add("Content-Type", "application/x-git-upload-pack-request")
-	reqest.Header.Add("Accept", "application/x-git-upload-pack-result")
-	reqest.Header.Add("User-Agent", "git/2.14.3 (Apple Git-98)")
-	reqest.Header.Add("Accept-Encoding", "gzip")
+	for key := range header {
+		reqest.Header.Add(key, header[key][0])
+	}
 	resp, err := client.Do(reqest)
 	defer resp.Body.Close()
 	if err != nil {
