@@ -195,15 +195,15 @@ func (repo *Repo) GopkgVersionRoot(version Version) string {
 	v := version.String()
 	if repo.OldFormat {
 		if repo.User == "" {
-			return "gopkg.co/" + v + "/" + repo.Name
+			return "localhost:8080/" + v + "/" + repo.Name
 		} else {
-			return "gopkg.co/" + repo.User + "/" + v + "/" + repo.Name
+			return "localhost:8080/" + repo.User + "/" + v + "/" + repo.Name
 		}
 	} else {
 		if repo.User == "" {
-			return "gopkg.co/" + repo.Name + "." + v
+			return "localhost:8080/" + repo.Name + "." + v
 		} else {
-			return "gopkg.co/" + repo.User + "/" + repo.Name + "." + v
+			return "localhost:8080/" + repo.User + "/" + repo.Name + "." + v
 		}
 	}
 }
@@ -221,15 +221,15 @@ func (repo *Repo) GopkgVersionRootEx(version Version, minor, patch bool) string 
 	v := version.String()
 	if repo.OldFormat {
 		if repo.User == "" {
-			return "gopkg.co/" + v + "/" + repo.Name
+			return "localhost:8080/" + v + "/" + repo.Name
 		} else {
-			return "gopkg.co/" + repo.User + "/" + v + "/" + repo.Name
+			return "localhost:8080/" + repo.User + "/" + v + "/" + repo.Name
 		}
 	} else {
 		if repo.User == "" {
-			return "gopkg.co/" + repo.Name + "." + v
+			return "localhost:8080/" + repo.Name + "." + v
 		} else {
-			return "gopkg.co/" + repo.User + "/" + repo.Name + "." + v
+			return "localhost:8080/" + repo.User + "/" + repo.Name + "." + v
 		}
 	}
 }
@@ -317,15 +317,22 @@ func handler(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	if repo.SubPath == "/git-upload-pack" {
-		resp.Header().Set("Location", "https://"+repo.GitHubRoot()+"/git-upload-pack")
-		resp.WriteHeader(http.StatusMovedPermanently)
+		body, err := ioutil.ReadAll(req.Body)
+		original, err := fetchGitUploadPack(repo, body)
+		if err==nil {
+			resp.Write(original)
+		} else {
+			resp.WriteHeader(http.StatusNotFound)
+		}
+		//resp.Header().Set("Location", "https://"+repo.GitHubRoot()+"/git-upload-pack")
+		//resp.WriteHeader(http.StatusMovedPermanently)
 		return
-	}
-
-	if repo.SubPath == "/info/refs" {
+	} else if repo.SubPath == "/info/refs" {
 		resp.Header().Set("Content-Type", "application/x-git-upload-pack-advertisement")
 		resp.Write(changed)
 		return
+	} else {
+		fmt.Println(repo.SubPath)
 	}
 
 	resp.Header().Set("Content-Type", "text/html")
@@ -353,6 +360,40 @@ const refsSuffix = ".git/info/refs?service=git-upload-pack"
 
 var ErrNoRepo = errors.New("repository not found in GitHub")
 var ErrNoVersion = errors.New("version reference not found in GitHub")
+
+func fetchGitUploadPack(repo *Repo, body []byte) (data []byte, err error) {
+	r := bytes.NewReader(body)
+	client := &http.Client{}
+	reqest, err := http.NewRequest("POST", "https://"+repo.GitHubRoot()+"/git-upload-pack", r)
+	if err != nil {
+		fmt.Println("Fatal error ", err.Error())
+	}
+	//Add 头协议
+	reqest.Header.Add("Content-Type", "application/x-git-upload-pack-request")
+	reqest.Header.Add("Accept", "application/x-git-upload-pack-result")
+	reqest.Header.Add("User-Agent", "git/2.14.3 (Apple Git-98)")
+	reqest.Header.Add("Accept-Encoding", "gzip")
+	resp, err := client.Do(reqest)
+	defer resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("cannot talk to GitHub: %v", err)
+	}
+	switch resp.StatusCode {
+	case 200:
+		// ok
+	case 401, 404:
+		return nil, ErrNoRepo
+	default:
+		fmt.Println(resp.Status)
+		return nil, fmt.Errorf("error from GitHub: %v", resp.Status)
+	}
+
+	data, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading from GitHub: %v", err)
+	}
+	return data, err
+}
 
 func fetchRefs(repo *Repo) (data []byte, err error) {
 	resp, err := httpClient.Get("https://" + repo.GitHubRoot() + refsSuffix)
@@ -446,12 +487,10 @@ func changeRefs(data []byte, major Version) (changed []byte, versions VersionLis
 			}
 		}
 	}
-
 	// If there were absolutely no versions, and v0 was requested, accept the master as-is.
 	if len(versions) == 0 && major == (Version{0, -1, -1, false}) {
 		return data, nil, nil
 	}
-
 	// If the file has no HEAD line or the version was not found, report as unavailable.
 	if hlinei == 0 || vrefhash == "" {
 		return nil, nil, ErrNoVersion
