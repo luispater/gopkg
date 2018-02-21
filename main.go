@@ -138,9 +138,24 @@ type Repo struct {
 // package versions are available in the repository.
 func (repo *Repo) SetVersions(all []Version) {
 	repo.AllVersions = all
-	for _, v := range repo.AllVersions {
-		if v.Major == repo.MajorVersion.Major && v.Unstable == repo.MajorVersion.Unstable && repo.FullVersion.Less(v) {
-			repo.FullVersion = v
+
+	if repo.MajorVersion.Minor == -1 && repo.MajorVersion.Patch == -1 {
+		for _, v := range repo.AllVersions {
+			if v.Major == repo.MajorVersion.Major && v.Unstable == repo.MajorVersion.Unstable && repo.FullVersion.Less(v) {
+				repo.FullVersion = v
+			}
+		}
+	} else if repo.MajorVersion.Patch == -1 {
+		for _, v := range repo.AllVersions {
+			if v.Major == repo.MajorVersion.Major && v.Minor == repo.MajorVersion.Minor && v.Unstable == repo.MajorVersion.Unstable && repo.FullVersion.Less(v) {
+				repo.FullVersion = v
+			}
+		}
+	} else {
+		for _, v := range repo.AllVersions {
+			if v.Major == repo.MajorVersion.Major && v.Minor == repo.MajorVersion.Minor && v.Patch == repo.MajorVersion.Patch && v.Unstable == repo.MajorVersion.Unstable && repo.FullVersion.Less(v) {
+				repo.FullVersion = v
+			}
 		}
 	}
 }

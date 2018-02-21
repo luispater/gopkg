@@ -259,7 +259,6 @@ func renderPackagePage(resp http.ResponseWriter, req *http.Request, repo *Repo) 
 				continue
 			}
 			v2, exists := latestVersions[v.Major]
-			fmt.Println(v2, exists)
 			if !exists || v2.Less(v) {
 				latestVersions[v.Major] = v
 			}
@@ -275,7 +274,6 @@ func renderPackagePage(resp http.ResponseWriter, req *http.Request, repo *Repo) 
 
 			if (repo.MajorVersion.Major == v.Major) && (v.Minor != -1) {
 				v2, exists := latestVersions[v.Minor]
-				fmt.Println(v2, exists)
 				if !exists || v2.Less(v) {
 					latestVersions[v.Minor] = v
 				}
@@ -292,7 +290,6 @@ func renderPackagePage(resp http.ResponseWriter, req *http.Request, repo *Repo) 
 
 			if (repo.MajorVersion.Major == v.Major) && (repo.MajorVersion.Minor == v.Minor) && (v.Patch != -1) {
 				v2, exists := latestVersions[v.Patch]
-				fmt.Println(v2, exists)
 				if !exists || v2.Less(v) {
 					latestVersions[v.Patch] = v
 				}
@@ -310,7 +307,6 @@ func renderPackagePage(resp http.ResponseWriter, req *http.Request, repo *Repo) 
 	}
 
 
-	fmt.Println(data.LatestVersions)
 	var dataMutex sync.Mutex
 	wantResps := 2
 	gotResp := make(chan bool, wantResps)
